@@ -19,6 +19,8 @@ TASK_FEATURE_LENGTHS = {"inputs": 512, "targets": 512}
 TRAIN_STEPS = 1000000
 DROPOUT_RATE = 0.0
 BATCH_SIZE = 1024
+NUM_MODEL_PARTITIONS = 1
+
 
 train/utils.DatasetConfig:
   split = 'train'
