@@ -22,10 +22,6 @@ DROPOUT_RATE = 0.0
 BATCH_SIZE = 128
 NUM_MODEL_PARTITIONS = 1
 
-
-train/utils.DatasetConfig:
-  split = 'train'
-
 train_script.train:
   eval_period = 5000
   
