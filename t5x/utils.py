@@ -128,6 +128,8 @@ class SaveCheckpointConfig:
   dtype: str = 'float32'
   # Number of steps between writing checkpoints.
   period: Optional[int] = None
+  # List of training steps (inputted as integers) to save checkpoints for
+  checkpoint_steps: Optional[Sequence[int]] = None
   # Number of most recent checkpoints to keep, or None to keep them all.
   keep: Optional[int] = None
   # Number of dataset checkpoints to keep, or None to keep them all.
@@ -328,109 +330,6 @@ class LegacyCheckpointer(orbax.checkpoint.Checkpointer):
         fallback_state=fallback_state,
         lazy_parameters=lazy_parameters,
     )
-
-
-def create_checkpoint_manager(
-    *,
-    save_cfg: Optional[SaveCheckpointConfig] = None,
-    restore_cfg: Optional[RestoreCheckpointConfig] = None,
-    train_state: train_state_lib.TrainState,
-    partitioner: partitioning.BasePartitioner,
-    ds_iter: Optional[
-        Union[tf.data.Iterator, clu.data.dataset_iterator.DatasetIterator]
-    ] = None,
-    model_dir: Optional[str] = None,
-):
-  """Creates Orbax CheckpointManager."""
-  if save_cfg is not None and restore_cfg is not None:
-    if (
-        save_cfg.checkpoint_manager_cls
-        is not restore_cfg.checkpoint_manager_cls
-    ):
-      msg = (
-          'Must provide matching configurations of `checkpoint_manager_cls` in '
-          '`save_cfg` and `restore_cfg`.'
-      )
-      raise ValueError(msg)
-
-  def _get_default_args(cls_or_fcn):
-    signature = inspect.signature(cls_or_fcn)
-    # Only get certain parameters needed for BestCheckpointManager
-    # configuration. These are the parameters of SaveBestCheckpointer that are
-    # not shared by regular Checkpointer. This whole approach is very hacky, but
-    # prevents us from needing to migrate every user to a new checkpoint config,
-    # which is the only alternative.
-    # Arguments aside from these should be set via CheckpointConfig, not gin.
-
-    def _is_relevant_arg(key: str):
-      return key in {
-          'metric_name_to_monitor',
-          'metric_mode',
-          'keep_checkpoints_without_metrics',
-          'force_keep_period',
-      }
-
-    return {
-        k: v.default
-        for k, v in signature.parameters.items()
-        if v.default is not inspect.Parameter.empty and _is_relevant_arg(k)
-        # Without the filtering by name specified above, we would have duplicate
-        # parameters being passed, which would give an error.
-    }
-
-  def _get_extra_kwargs(cfg):
-    extra_kwargs = {}
-    # Sometimes, the user pass in a `functools.partial` of
-    # `SaveBestCheckpointer` which will cause issubclass to raise an Exception
-    # since `functools.partial` is not a class.
-    if isinstance(cfg.checkpointer_cls, functools.partial):
-      # Note, this is intentionally moved out of the above if statement compared
-      # to the condition below. This is because we need to handle the kwargs
-      # differently since it's a functools.partial.
-      extra_kwargs = _get_default_args(cfg.checkpointer_cls)
-    else:
-      if issubclass(cfg.checkpointer_cls, checkpoints.SaveBestCheckpointer):
-        extra_kwargs = _get_default_args(cfg.checkpointer_cls.__init__)
-    return extra_kwargs
-
-  save_dtype = None
-  restore_dtype = None
-  period = None
-  keep = None
-  should_save_restore_dataset = False
-  checkpoint_manager_cls = None
-  extra_kwargs = {}
-  if save_cfg is not None:
-    should_save_restore_dataset |= save_cfg.save_dataset
-    save_dtype = save_cfg.dtype
-    keep = save_cfg.keep
-    period = save_cfg.period
-    checkpoint_manager_cls = save_cfg.checkpoint_manager_cls
-    extra_kwargs = _get_extra_kwargs(save_cfg)
-  if restore_cfg is not None:
-    should_save_restore_dataset |= restore_cfg.restore_dataset
-    restore_dtype = restore_cfg.dtype
-    # Doesn't matter if we reset this, since they're required to be the same
-    # anyway.
-    checkpoint_manager_cls = restore_cfg.checkpoint_manager_cls
-    # If already set, configuration from save_cfg takes precedence. Give
-    # extra_kwargs a chance to be reset to something more specialized, if not
-    # specified in save_cfg
-    if not extra_kwargs:
-      extra_kwargs = _get_extra_kwargs(restore_cfg)
-  ds_iter = ds_iter if should_save_restore_dataset else None
-
-  return checkpoint_manager_cls(
-      directory=model_dir,
-      train_state=train_state,
-      partitioner=partitioner,
-      dataset_iterator=ds_iter,
-      save_dtype=save_dtype,
-      restore_dtype=restore_dtype,
-      keep=keep,
-      period=period,
-      **extra_kwargs,
-  )
 
 
 class LegacyCheckpointManager(orbax.checkpoint.CheckpointManager):
@@ -1052,7 +951,7 @@ def get_first_valid_restore_config_and_paths(
 def get_fallback_state(
     restore_cfg: RestoreCheckpointConfig,
     init_fn: Callable[[jnp.ndarray], Mapping[str, Any]],
-    init_rng: jnp.ndarray,
+    init_rng: Optional[jnp.ndarray],
 ) -> Optional[Mapping[str, Any]]:
   """Returns the fallback_state that can be used in restore()."""
   if restore_cfg is None:
@@ -1117,8 +1016,8 @@ class TrainStateInitializer:
     """
 
     def initialize_train_state(rng: Array):
-      initial_variables = init_fn(
-          rng=rng, input_shapes=input_shapes, input_types=input_types
+      initial_variables = flax.core.freeze(
+          init_fn(rng=rng, input_shapes=input_shapes, input_types=input_types)
       )
       if optimizer_def:
         return train_state_lib.FlaxOptimTrainState.create(
@@ -1270,6 +1169,167 @@ class TrainStateInitializer:
     return self.from_checkpoint(
         ckpt_cfgs, ds_iter=ds_iter, init_rng=init_rng
     ) or self.from_scratch(init_rng)
+
+
+def create_checkpoint_manager_and_restore(
+    train_state_initializer: TrainStateInitializer,
+    partitioner: partitioning.BasePartitioner,
+    restore_checkpoint_cfg: RestoreCheckpointConfig,
+    restore_path: Optional[str],
+    fallback_init_rng: Optional[jnp.ndarray],
+    save_checkpoint_cfg: Optional[SaveCheckpointConfig] = None,
+    model_dir: Optional[str] = None,
+    ds_iter: Optional[
+        Union[tf.data.Iterator, clu.data.dataset_iterator.DatasetIterator]
+    ] = None,
+    use_orbax: bool = False,
+) -> Tuple[
+    Optional[train_state_lib.TrainState],
+    Union[LegacyCheckpointManager, checkpoints.OrbaxCheckpointManagerInterface],
+]:
+  """Creates a CheckpointManager and restores TrainState if available."""
+
+  def _init(rng):
+    return train_state_initializer.from_scratch(rng).state_dict()
+
+  restore_path_list = [restore_path] if restore_path else []
+  model_dir = model_dir or restore_checkpoint_cfg.path
+  if use_orbax:
+    checkpoint_manager = create_orbax_checkpoint_manager(
+        save_cfg=save_checkpoint_cfg,
+        restore_cfg=restore_checkpoint_cfg,
+        train_state=train_state_initializer.global_train_state_shape,
+        partitioner=partitioner,
+        ds_iter=ds_iter,
+        model_dir=model_dir,
+    )
+    train_state = restore(
+        checkpoint_manager,
+        restore_path_list,
+        restore_checkpoint_cfg,
+        get_fallback_state(restore_checkpoint_cfg, _init, fallback_init_rng),
+    )
+  else:
+    checkpoint_manager = LegacyCheckpointManager(
+        save_cfg=save_checkpoint_cfg,
+        restore_cfg=restore_checkpoint_cfg,
+        train_state_shape=train_state_initializer.global_train_state_shape,
+        partitioner=partitioner,
+        ds_iter=ds_iter,
+        model_dir=model_dir,
+    )
+    train_state = checkpoint_manager.restore(
+        restore_path_list,
+        restore_checkpoint_cfg,
+        get_fallback_state(restore_checkpoint_cfg, _init, fallback_init_rng),
+    )
+
+  if isinstance(train_state, Sequence):
+    raise ValueError('Cannot restore multiple checkpoints.')
+  return train_state, checkpoint_manager
+
+
+def create_orbax_checkpoint_manager(
+    *,
+    save_cfg: Optional[SaveCheckpointConfig] = None,
+    restore_cfg: Optional[RestoreCheckpointConfig] = None,
+    train_state: train_state_lib.TrainState,
+    partitioner: partitioning.BasePartitioner,
+    ds_iter: Optional[
+        Union[tf.data.Iterator, clu.data.dataset_iterator.DatasetIterator]
+    ] = None,
+    model_dir: Optional[str] = None,
+):
+  """Creates Orbax CheckpointManager."""
+  if save_cfg is not None and restore_cfg is not None:
+    if (
+        save_cfg.checkpoint_manager_cls
+        is not restore_cfg.checkpoint_manager_cls
+    ):
+      msg = (
+          'Must provide matching configurations of `checkpoint_manager_cls` in '
+          '`save_cfg` and `restore_cfg`.'
+      )
+      raise ValueError(msg)
+
+  def _get_default_args(cls_or_fcn):
+    signature = inspect.signature(cls_or_fcn)
+    # Only get certain parameters needed for BestCheckpointManager
+    # configuration. These are the parameters of SaveBestCheckpointer that are
+    # not shared by regular Checkpointer. This whole approach is very hacky, but
+    # prevents us from needing to migrate every user to a new checkpoint config,
+    # which is the only alternative.
+    # Arguments aside from these should be set via CheckpointConfig, not gin.
+
+    def _is_relevant_arg(key: str):
+      return key in {
+          'metric_name_to_monitor',
+          'metric_mode',
+          'keep_checkpoints_without_metrics',
+          'force_keep_period',
+      }
+
+    return {
+        k: v.default
+        for k, v in signature.parameters.items()
+        if v.default is not inspect.Parameter.empty and _is_relevant_arg(k)
+        # Without the filtering by name specified above, we would have duplicate
+        # parameters being passed, which would give an error.
+    }
+
+  def _get_extra_kwargs(cfg):
+    extra_kwargs = {}
+    # Sometimes, the user pass in a `functools.partial` of
+    # `SaveBestCheckpointer` which will cause issubclass to raise an Exception
+    # since `functools.partial` is not a class.
+    if isinstance(cfg.checkpointer_cls, functools.partial):
+      # Note, this is intentionally moved out of the above if statement compared
+      # to the condition below. This is because we need to handle the kwargs
+      # differently since it's a functools.partial.
+      extra_kwargs = _get_default_args(cfg.checkpointer_cls)
+    else:
+      if issubclass(cfg.checkpointer_cls, checkpoints.SaveBestCheckpointer):
+        extra_kwargs = _get_default_args(cfg.checkpointer_cls.__init__)
+    return extra_kwargs
+
+  save_dtype = None
+  restore_dtype = None
+  period = None
+  keep = None
+  should_save_restore_dataset = False
+  checkpoint_manager_cls = None
+  extra_kwargs = {}
+  if save_cfg is not None:
+    should_save_restore_dataset |= save_cfg.save_dataset
+    save_dtype = save_cfg.dtype
+    keep = save_cfg.keep
+    period = save_cfg.period
+    checkpoint_manager_cls = save_cfg.checkpoint_manager_cls
+    extra_kwargs = _get_extra_kwargs(save_cfg)
+  if restore_cfg is not None:
+    should_save_restore_dataset |= restore_cfg.restore_dataset
+    restore_dtype = restore_cfg.dtype
+    # Doesn't matter if we reset this, since they're required to be the same
+    # anyway.
+    checkpoint_manager_cls = restore_cfg.checkpoint_manager_cls
+    # If already set, configuration from save_cfg takes precedence. Give
+    # extra_kwargs a chance to be reset to something more specialized, if not
+    # specified in save_cfg
+    if not extra_kwargs:
+      extra_kwargs = _get_extra_kwargs(restore_cfg)
+  ds_iter = ds_iter if should_save_restore_dataset else None
+
+  return checkpoint_manager_cls(
+      directory=model_dir,
+      train_state=train_state,
+      partitioner=partitioner,
+      dataset_iterator=ds_iter,
+      save_dtype=save_dtype,
+      restore_dtype=restore_dtype,
+      keep=keep,
+      period=period,
+      **extra_kwargs,
+  )
 
 
 # -----------------------------------------------------------------------------
@@ -2124,5 +2184,94 @@ def override_params_axes_names(
       flat_params_axes
   )
   return flax.core.freeze(model_variables)
+
+
+def find_next_checkpoint_step(
+    checkpoint_steps_index: int,
+    inner_num_steps: int,
+    is_checkpoint_step: bool,
+    host_step: int,
+    checkpoint_steps: Sequence[int],
+    epoch_end_step: int,
+    checkpoint_period: int,
+    first_step: int,
+):
+  """Finds next valid checkpoint step in checkpoint_steps list parameter to stop scalar training and save a checkpoint at.
+
+  Checkpoint step is considered valid if it is less than the epoch end step,
+  not at a concurrent checkpoint_period step, greater than the epoch first step.
+
+  Args:
+    checkpoint_steps_index: Current index in checkpoint_steps list while
+      training.
+    inner_num_steps: Number of scalar steps to iterate through in training.
+    is_checkpoint_step: Dictates whether the current subset of scalar steps
+      contains a valid checkpoint_step to save.
+    host_step: Host step of training.
+    checkpoint_steps: List of checkpoint_stems passed in as parameter in
+      checkpoint_cfg.save.
+    epoch_end_step: Last training step in epoch.
+    checkpoint_period: Period value passed in as parameter in
+      checkpoint_cfg.save.
+    first_step: First step in epoch while training.
+
+  Returns:
+    Tuple containing (possibly) halted inner_num_steps value and
+    is_checkpoint_step if checkpoint step value was found.
+  """
+  # checks to see if inner_num_steps + host_step will out-pace current
+  # checkpoint steps index that should be saved
+  while (
+      checkpoint_steps
+      and (inner_num_steps + host_step)
+      > checkpoint_steps[checkpoint_steps_index]
+  ):
+    curr_checkpoint_step = checkpoint_steps[checkpoint_steps_index]
+    if (
+        ((curr_checkpoint_step - first_step) % checkpoint_period != 0)
+        and checkpoint_steps_index > first_step
+        and curr_checkpoint_step < epoch_end_step
+    ):
+      inner_num_steps = curr_checkpoint_step - host_step
+      is_checkpoint_step = True
+      return (inner_num_steps, is_checkpoint_step)
+    if (
+        not is_checkpoint_step
+        and checkpoint_steps_index == len(checkpoint_steps) - 1
+    ):
+      return (inner_num_steps, is_checkpoint_step)
+  return (inner_num_steps, is_checkpoint_step)
+
+
+def find_first_checkpoint_step(
+    checkpoint_steps_index: int,
+    checkpoint_steps: Sequence[int],
+    first_step: int,
+    host_step: int,
+) -> int:
+  """Finds the first valid step in checkpoint_step list parameter to save a checkpoint at.
+
+  Args:
+    checkpoint_steps_index: Current index in checkpoint_steps list while
+      training.
+    checkpoint_steps: List of checkpoint_stems passed in as parameter in
+      checkpoint_cfg.save.
+    first_step: First step in epoch while training.
+    host_step: Host step of training.
+
+  Returns:
+    Integer containing first valid checkpoint step index to start off epoch
+    training on.
+  """
+  while (
+      checkpoint_steps
+      and checkpoint_steps_index < len(checkpoint_steps) - 1
+      and (
+          host_step > checkpoint_steps[checkpoint_steps_index]
+          or checkpoint_steps[checkpoint_steps_index] == first_step
+      )
+  ):
+    checkpoint_steps_index += 1
+  return checkpoint_steps_index
 
 
