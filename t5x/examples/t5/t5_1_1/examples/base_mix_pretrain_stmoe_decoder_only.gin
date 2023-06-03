@@ -14,7 +14,7 @@ include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.g
 include 't5x/contrib/moe/configs/runs/pretrain.gin'
 # include 't5x/configs/runs/pretrain.gin'
 
-MIXTURE_OR_TASK_NAME = "my_dataset_ul2"
+MIXTURE_OR_TASK_NAME = "mix_ul2"
 USE_CACHED_TASKS = False
 TASK_FEATURE_LENGTHS = {"inputs": 512, "targets": 512}
 TRAIN_STEPS = 500000
