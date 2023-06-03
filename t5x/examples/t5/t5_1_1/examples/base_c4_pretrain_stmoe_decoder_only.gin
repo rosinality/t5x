@@ -32,5 +32,5 @@ train_script.train:
 moe_trainer.MoeTrainer:
   num_microbatches = 1
   
-# models.MoeDecoderOnlyModel.inputs_bidirectional_attention=True
+models.MoeDecoderOnlyModel.inputs_bidirectional_attention=True
  
