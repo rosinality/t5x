@@ -21,7 +21,7 @@ TRAIN_STEPS = 610000  # 524288 pre-trained steps + 20000 fine-tuning steps.
 USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 1
 
-INITIAL_CHECKPOINT_PATH = "gs://fuzhao/t5x/openmoe-base-debug/checkpoint_600000"
+INITIAL_CHECKPOINT_PATH = "gs://fuzhao/t5x/openmoe-base-debug/t5-500KSteps/checkpoint_600000"
 
 
 # `LOSS_NORMALIZING_FACTOR`: When fine-tuning a model that was pre-trained
