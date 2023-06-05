@@ -10,8 +10,8 @@ from t5x.contrib.moe import trainer as moe_trainer
 from t5x.contrib.moe import models
 
 
-include 't5x/configs/runs/finetune.gin'
-include 't5x/examples/t5/t5_1_1/base.gin'
+include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.gin'
+include 't5x/contrib/moe/configs/runs/finetune.gin'
 
 BATCH_SIZE = 128
 MIXTURE_OR_TASK_NAME = "ul2_squad_v010_allanswers"
