@@ -15,7 +15,7 @@ include 't5x/contrib/moe/configs/runs/finetune.gin'
 
 BATCH_SIZE = 128
 MIXTURE_OR_TASK_NAME = "squad_v010_allanswers"
-TASK_FEATURE_LENGTHS = {'inputs': 512, 'targets': 128}
+TASK_FEATURE_LENGTHS = {'inputs': 512, 'targets': 512}
 DROPOUT_RATE = 0.1
 TRAIN_STEPS = 610000  # 524288 pre-trained steps + 20000 fine-tuning steps.
 USE_CACHED_TASKS = False
