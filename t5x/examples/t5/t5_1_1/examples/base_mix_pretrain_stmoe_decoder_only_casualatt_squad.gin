@@ -10,8 +10,8 @@ from t5x.contrib.moe import trainer as moe_trainer
 from t5x.contrib.moe import models
 
 include 't5x/contrib/moe/configs/runs/finetune.gin'
-# include 't5x/contrib/moe/configs/runs/eval.gin'
-# include 't5x/contrib/moe/configs/runs/infer.gin'
+include 't5x/contrib/moe/configs/runs/eval.gin'
+include 't5x/contrib/moe/configs/runs/infer.gin'
 include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.gin'
 
 
