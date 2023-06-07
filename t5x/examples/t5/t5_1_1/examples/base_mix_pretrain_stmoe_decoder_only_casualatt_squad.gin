@@ -39,12 +39,13 @@ train_script.train:
   train_eval_dataset_cfg = @train_eval/utils.DatasetConfig()
   infer_eval_dataset_cfg = @infer_eval/utils.DatasetConfig()
 
-models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 4
+models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
 
 decoding.temperature_sample:
-  temperature = 1.0
-  topk = 40
+  temperature = 0.0
+  
+#   topk = 40
 
 train/utils.DatasetConfig:
   pack = False
