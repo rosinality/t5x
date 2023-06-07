@@ -9,6 +9,7 @@ from t5x import partitioning
 from t5x import utils
 from t5x.contrib.moe import models
 
+include 't5x/contrib/moe/configs/runs/eval.gin'
 include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.gin'
 
 CHECKPOINT_PATH = %gin.REQUIRED
@@ -31,7 +32,6 @@ eval_script.evaluate:
   dataset_cfg = @utils.DatasetConfig()
   restore_checkpoint_cfg = @utils.RestoreCheckpointConfig()
   output_dir = %EVAL_OUTPUT_DIR
-  partitioner = @partitioning.PjitPartitioner()
 
 utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
