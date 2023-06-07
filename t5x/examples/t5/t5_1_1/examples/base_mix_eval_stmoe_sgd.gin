@@ -19,7 +19,7 @@ NUM_MODEL_PARTITIONS = 1
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "bigbench:gem.mix.t5_default_vocab.1_shot.all_examples.schema_guided_dialog"
 
-models.MoeEncoderDecoderModel.predict_batch_with_aux.num_decodes = 4
+models.MoeEncoderDecoderModel.predict_batch_with_aux.num_decodes = 1
 
 eval_script.evaluate:
   model = %MODEL  # imported from separate gin file
