@@ -5,7 +5,6 @@ import seqio
 import bigbench.bbseqio.tasks
 from t5.data import mixtures
 from t5x import decoding
-from t5x import partitioning
 from t5x import utils
 from t5x.contrib.moe import models
 
@@ -41,8 +40,6 @@ utils.DatasetConfig:
   shuffle = False
   seed = 42
   use_cached = %USE_CACHED_TASKS
-
-partitioning.PjitPartitioner.num_partitions = %NUM_MODEL_PARTITIONS
 
 utils.RestoreCheckpointConfig:
   path = %CHECKPOINT_PATH
