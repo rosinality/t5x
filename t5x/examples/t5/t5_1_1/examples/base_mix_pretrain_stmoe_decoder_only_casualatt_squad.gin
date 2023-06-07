@@ -6,6 +6,7 @@ import seqio
 import flaxformer
 from t5x import utils
 from t5x import trainer
+from t5x import decoding
 from t5x.contrib.moe import trainer as moe_trainer
 from t5x.contrib.moe import models
 
@@ -39,6 +40,9 @@ train_script.train:
   infer_eval_dataset_cfg = @infer_eval/utils.DatasetConfig()
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 4
+models.MoeDecoderOnlyModel.decode_fn = @decoding.beam_search
+
+
 
 train/utils.DatasetConfig:
   pack = False
