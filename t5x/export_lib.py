@@ -100,6 +100,7 @@ class CreateDecodingStateCallbackFn(typing_extensions.Protocol):
       vocab: seqio.Vocabulary,
       num_decodes: int = 1,
       output_feature_names: Optional[List[str]] = None,
+      call_tf_graph: bool = False,
   ) -> decoding.StateCallbackFn:
     ...
 
@@ -122,6 +123,7 @@ class ExportableModule(tf.Module):
       jit_compile: bool = True,
       use_batch_function: bool = False,
       use_gpu: bool = False,
+      enable_large_batch_splitting: bool = True,
   ):
     super().__init__()
 
@@ -166,6 +168,7 @@ class ExportableModule(tf.Module):
     self._allowed_batch_sizes = allowed_batch_sizes
     self._use_batch_function = use_batch_function
     self._max_batch_size = max_batch_size
+    self._enable_large_batch_splitting = enable_large_batch_splitting
 
   @functools.partial(tf.function, autograph=False, jit_compile=False)
   def __call__(self, *input_batches) -> Tuple[Any, Any]:
@@ -191,6 +194,7 @@ class ExportableModule(tf.Module):
         max_batch_size=max_batch_size,
         batch_timeout_micros=self._batch_timeout_micros,
         allowed_batch_sizes=allowed_batch_sizes,
+        enable_large_batch_splitting=self._enable_large_batch_splitting,
     )
     flattended, tree_def = jax.tree_util.tree_flatten(input_batches)
     return batch_wrapper(functools.partial(self._call, tree_def=tree_def))(
@@ -492,7 +496,6 @@ def create_preprocessor(
           input_texts, sep=split_separator, maxsplit=1)
       split = ragged_split.to_tensor(shape=[tf.shape(input_texts)[0], 2])
       inputs, targets = split[:, 0], split[:, 1]
-    features = dict(inputs=inputs, targets=targets)
 
     # TODO(b/188656799): Generalize this code to work with arbitrary models.
     def featurize(text, k):
@@ -526,7 +529,7 @@ def create_preprocessor(
     )
     encoder_input_tokens, _, _ = tf.map_fn(
         functools.partial(featurize, k='inputs'),
-        features['inputs'],
+        inputs,
         fn_output_signature=(encoder_output_signature,) * 3,
     )
     encoder_input_tokens = encoder_input_tokens.to_tensor()
@@ -541,7 +544,7 @@ def create_preprocessor(
     )
     decoder_target_tokens, decoder_input_tokens, loss_weights = tf.map_fn(
         functools.partial(featurize, k='targets'),
-        features['targets'],
+        targets,
         fn_output_signature=(decoder_output_signature,) * 3,
     )
     decoder_target_tokens = decoder_target_tokens.to_tensor()
@@ -578,11 +581,6 @@ def create_dual_encoder_preprocessor(
     else:
       targets = tf.broadcast_to(tf.constant(''), tf.shape(input_texts))
 
-    features = dict(
-        inputs=inputs,
-        targets=targets,
-    )
-
     # TODO(b/188656799): Generalize this code to work with arbitrary models.
     def featurize(text, k):
       """Replicates what tokenization + nlp.nlx.t5x_retrieval.DualEncoderFeatureConverter does, without Dataset."""
@@ -603,12 +601,14 @@ def create_dual_encoder_preprocessor(
 
     left_encoder_input_tokens = tf.map_fn(
         functools.partial(featurize, k='inputs'),
-        features['inputs'],
-        fn_output_signature=(tf.int32))
+        inputs,
+        fn_output_signature=(tf.int32),
+    )
     right_encoder_input_tokens = tf.map_fn(
         functools.partial(featurize, k='targets'),
-        features['targets'],
-        fn_output_signature=(tf.int32))
+        targets,
+        fn_output_signature=(tf.int32),
+    )
 
     return dict(
         left_encoder_input_tokens=left_encoder_input_tokens,
@@ -1029,12 +1029,15 @@ def _request_for_batch(
     signature_name: str,
     batch_size: Optional[int],
     decoder_params_spec: Optional[DecoderParamsSpec] = None,
+    input_tensor_dtype: Optional[tf.DType] = None,
 ) -> predict_pb2.PredictRequest:
   """Adds a single batch of Predict warmup data."""
   request = predict_pb2.PredictRequest()
   request.model_spec.name = model_name
   request.model_spec.signature_name = signature_name
-  if text_batch and isinstance(text_batch[0], (str, bytes)):
+  if input_tensor_dtype is not None:
+    dtype = input_tensor_dtype
+  elif text_batch and isinstance(text_batch[0], (str, bytes)):
     dtype = tf.string
   else:
     dtype = tf.int32
@@ -1095,6 +1098,7 @@ def write_warmup_examples(
     request_to_prediction_log: Callable[
         [predict_pb2.PredictRequest], prediction_log_pb2.PredictionLog
     ] = _request_to_prediction_log,
+    input_tensor_dtype: Optional[tf.DType] = None,
 ):
   """Writes warmup examples for all batch_sizes requested.
 
@@ -1125,6 +1129,7 @@ def write_warmup_examples(
       examples.
     request_to_prediction_log: A function that creates a PredictionLog from a
       given request.
+    input_tensor_dtype: The dtype of the input tensor.
   """
   if generate_examples_fn:
     logging.warning(
@@ -1149,6 +1154,7 @@ def write_warmup_examples(
             signature_name,
             batch_size,
             decoder_params_spec,
+            input_tensor_dtype,
         )
         log = request_to_prediction_log(request)
         writer.write(log.SerializeToString())
@@ -1283,9 +1289,7 @@ def save(
     decode_outputs: Optional[bool] = None,
     trailing_shapes: Optional[Mapping[str, Tuple[int, ...]]] = None,
     output_vocab_feature_name: Optional[str] = 'targets',
-    signature_name: Optional[
-        str
-    ] = tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY,
+    signature_name: str = tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY,
     create_polymorphic_shapes_fn: Any = create_batch_polymorphic_shapes,
 ):
   """Saves the passed EncoderDecoderModel as a TPU-enabled TF SavedModel.
@@ -1338,7 +1342,7 @@ def save(
     output_vocab_feature_name: The vocabulary feature which maps decoded ids to
       plain text. For standard T5X models this will always be 'targets', but may
       be different or empty for other models.
-    signature_name: Optional name of the exported function.
+    signature_name: Name of the exported function.
     create_polymorphic_shapes_fn: Optional function to create polymorphic shapes
       for input tensors to the JAX model function.
   """  # fmt: skip
@@ -1385,7 +1389,8 @@ def save(
   decoding_state_callback_fn = None
   if create_decoding_state_callback_fn is not None:
     decoding_state_callback_fn = create_decoding_state_callback_fn(
-        vocab=output_vocab
+        vocab=output_vocab,
+        call_tf_graph=native_lowering,
     )
 
   model_tf_fn = create_inference_function_fn(
