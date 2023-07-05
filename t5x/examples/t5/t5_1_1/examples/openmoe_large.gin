@@ -24,15 +24,15 @@ USE_CACHED_TASKS = False
 TASK_FEATURE_LENGTHS = {"inputs": 1024, "targets": 1024}
 TRAIN_STEPS = 500000
 DROPOUT_RATE = 0.0
-BATCH_SIZE = 128
-NUM_MODEL_PARTITIONS = 1
+BATCH_SIZE = 1024
+NUM_MODEL_PARTITIONS = 8
 NUM_EMBEDDINGS = 250112  # vocab size rounded to a multiple of 128 for TPU efficiency
 
 train_script.train:
   eval_period = 5000
   
 moe_trainer.MoeTrainer:
-  num_microbatches = 1
+  num_microbatches = 4
   
 # models.MoeDecoderOnlyModel.inputs_bidirectional_attention=True
  
