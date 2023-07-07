@@ -10,16 +10,6 @@ from t5x.contrib.moe import models
 
 include 't5x/contrib/moe/configs/runs/eval.gin'
 include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.gin'
-# Register necessary SeqIO Tasks/Mixtures.
-from __gin__ import dynamic_registration
-import t5.data.mixtures
-import __main__ as train_script
-import seqio
-import flaxformer
-from t5x import utils
-from t5x import trainer
-from t5x.contrib.moe import trainer as moe_trainer
-from t5x.contrib.moe import models
 
 # Vocabulary (shared by encoder and decoder)
 VOCABULARY = @seqio.SentencePieceVocabulary()
