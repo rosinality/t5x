@@ -27,7 +27,7 @@ DROPOUT_RATE = 0.0
 BATCH_SIZE = 1024
 NUM_MODEL_PARTITIONS = 8
 NUM_EXPERT_PARTITIONS = 32
-NUM_EMBEDDINGS = 250112  # vocab size rounded to a multiple of 128 for TPU efficiency
+NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
 
 train_script.train:
   eval_period = 5000
