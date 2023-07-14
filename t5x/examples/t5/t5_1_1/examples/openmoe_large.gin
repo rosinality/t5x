@@ -5,7 +5,7 @@ import __main__ as train_script
 import seqio
 import flaxformer
 from t5x import utils
-from t5x import trainer
+# from t5x import trainer
 from t5x.contrib.moe import trainer as moe_trainer
 from t5x.contrib.moe import models
 
