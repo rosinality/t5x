@@ -33,7 +33,11 @@ train_script.train:
   eval_period = 5000
   
 moe_trainer.MoeTrainer:
-  num_microbatches = 16
-  
+  num_microbatches = 8
+
+# Use 16 on 256 TPU v3
+# moe_trainer.MoeTrainer:
+#   num_microbatches = 16
+
 # models.MoeDecoderOnlyModel.inputs_bidirectional_attention=True
  
