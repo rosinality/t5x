@@ -34,6 +34,7 @@ import os
 import re
 import subprocess
 import time
+import typing
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from absl import logging
@@ -49,7 +50,7 @@ from jax.experimental import multihost_utils
 from jax.experimental.array_serialization import serialization as array_serialization
 import jax.numpy as jnp
 import numpy as np
-import orbax.checkpoint
+import orbax.checkpoint as ocp
 from t5x import checkpoint_importer
 from t5x import checkpoint_utils
 from t5x import optimizers
@@ -60,9 +61,7 @@ import tensorflow as tf
 from tensorflow.io import gfile
 import tensorstore as ts
 import typing_extensions
-from tensorboard.backend.event_processing import directory_watcher
-from tensorboard.backend.event_processing import event_file_loader
-from tensorboard.backend.event_processing import io_wrapper
+
 
 PartitionSpec = partitioning.PartitionSpec
 PyTree = Any
@@ -836,7 +835,7 @@ class Checkpointer(object):
     end_time = time.time()
     monitoring.record_event_duration_secs(_WRITE_CHECKPOINT_EVENT,
                                           end_time - start_time)
-    orbax.checkpoint.utils.record_saved_duration(start_time)
+    ocp.utils.record_saved_duration(start_time)
 
   def _write_state_to_tensorstore(
       self,
@@ -1124,7 +1123,6 @@ class Checkpointer(object):
     end_time = time.time()
     monitoring.record_event_duration_secs(_READ_CHECKPOINT_EVENT,
                                           end_time - start_time)
-
     return restored_train_state
 
   def _restore_train_state(
@@ -1886,7 +1884,7 @@ class _OrbaxParamInfo:
   mesh_axes: partitioning.PartitionSpec
 
 
-class DatasetCheckpointHandler(orbax.checkpoint.CheckpointHandler):
+class DatasetCheckpointHandler(ocp.CheckpointHandler):
   """A CheckpointHandler implementation that handles tf.data.Iterator."""
 
   def __init__(self, checkpoint_filename: str):
@@ -1929,7 +1927,7 @@ class DatasetCheckpointHandler(orbax.checkpoint.CheckpointHandler):
 
   def structure(self, directory: epath.Path) -> Any:
     """Unimplemented. See parent class."""
-    return NotImplementedError
+    pass
 
 
 def _step_from_train_state(train_state: train_state_lib.TrainState) -> int:
@@ -1942,34 +1940,29 @@ def _step_from_train_state(train_state: train_state_lib.TrainState) -> int:
 
 def _construct_save_args(
     param_info: _OrbaxParamInfo, dtype: jnp.dtype
-) -> orbax.checkpoint.SaveArgs:
+) -> ocp.SaveArgs:
   """Create SaveArgs for Orbax saving."""
   if param_info.name.split('.')[0] != 'target':
     dtype = None
-  return orbax.checkpoint.SaveArgs(
-      aggregate=param_info.mesh_axes is None, dtype=dtype
-  )
+  return ocp.SaveArgs(aggregate=param_info.mesh_axes is None, dtype=dtype)
 
 
 def _construct_restore_args(
     param_info: _OrbaxParamInfo,
     dtype: jnp.dtype,
     mesh: jax.sharding.Mesh,
-    lazy_parameters: bool,
-) -> orbax.checkpoint.RestoreArgs:
+) -> ocp.RestoreArgs:
   """Create RestoreArgs for Orbax restoration."""
   if not isinstance(param_info, _OrbaxParamInfo):  # from fallback
-    return orbax.checkpoint.RestoreArgs(dtype=dtype, lazy=lazy_parameters)
+    return ocp.RestoreArgs(dtype=dtype)
   if param_info.name.split('.')[0] != 'target':
     dtype = None
   if param_info.mesh_axes is None:
-    return orbax.checkpoint.RestoreArgs(dtype=dtype, lazy=lazy_parameters)
-  return orbax.checkpoint.ArrayRestoreArgs(
-      restore_type=jax.Array,
+    return ocp.RestoreArgs(dtype=dtype)
+  return ocp.ArrayRestoreArgs(
       mesh=mesh,
       mesh_axes=param_info.mesh_axes,
       dtype=dtype,
-      lazy=lazy_parameters,
   )
 
 
@@ -1991,7 +1984,7 @@ def _construct_orbax_param_infos(
 
 
 def _construct_orbax_restoration_transforms(
-    manager: orbax.checkpoint.CheckpointManager,
+    manager: ocp.CheckpointManager,
     step: int,
     directory: epath.Path,
     state_dict: PyTree,
@@ -2006,7 +1999,15 @@ def _construct_orbax_restoration_transforms(
   )
   assert state_subdir.is_dir()
   use_orbax_format = state_subdir.stem == _STATE_KEY  # Standard Orbax format
-  structure = manager._checkpointers[_STATE_KEY].structure(state_subdir)  # pylint: disable=protected-access
+  checkpointer = typing.cast(
+      ocp.Checkpointer, manager._checkpointers[_STATE_KEY]  # pylint: disable=protected-access
+  )
+  handler = typing.cast(
+      ocp.PyTreeCheckpointHandler, checkpointer._handler  # pylint: disable=protected-access
+  )
+  structure = handler._read_aggregate_file(  # pylint: disable=protected-access
+      state_subdir
+  )
   # Note: Ideally we would use Orbax's `transform_fn` to do this logic, but
   # the problem is we need to modify `restore_args`, and there isn't a great
   # way to do that within Orbax.
@@ -2027,21 +2028,55 @@ def _construct_orbax_restoration_transforms(
   )
 
   def _transform_fn(
-      item: PyTree, structure: PyTree, param_infos: PyTree
+      item_: PyTree, structure_: PyTree, param_infos_: PyTree
   ) -> Tuple[PyTree, PyTree]:
     # When this function is called from within PyTreeCheckpointHandler,
     # transforms will already have been performed (see above), but use this
     # function to hack param_infos to return the needed values.
     # This structure is unneeded, because we already restored and transformed
     # it.
-    del structure
-    # Construct param_infos from item because item is the transformed
-    # structure.
-    # pylint: disable=protected-access
-    param_infos = orbax.checkpoint.pytree_checkpoint_handler._get_param_infos_from_structure(
-        manager._get_save_directory(step, directory, key_name=_STATE_KEY), item
+    del structure_, param_infos_
+
+    def _make_orbax_internal_metadata(value: Any, args: ocp.RestoreArgs):
+      if ocp.utils.leaf_is_placeholder(value):
+        if isinstance(args, ocp.ArrayRestoreArgs):
+          restore_type = 'jax.Array'
+        else:
+          restore_type = 'np.ndarray'
+        return ocp.pytree_checkpoint_handler._InternalValueMetadata(  # pylint: disable=protected-access
+            restore_type=restore_type
+        )
+      else:
+        return ocp.pytree_checkpoint_handler._InternalValueMetadata(  # pylint: disable=protected-access
+            restore_type=None,
+            skip_deserialize=True,
+            aggregate_value=value,
+        )
+
+    directory_ = manager._get_save_directory(  # pylint: disable=protected-access
+        step, directory, key_name=_STATE_KEY
     )
-    return item, param_infos
+
+    def _modify_orbax_param_info(info, value):
+      if ocp.utils.leaf_is_placeholder(value):
+        name = ocp.utils.name_from_leaf_placeholder(value)
+        return dataclasses.replace(info, path=directory_ / name)
+      return info
+
+    item_ = jax.tree_util.tree_map(
+        _make_orbax_internal_metadata, item_, restore_args
+    )
+    param_infos_, _ = ocp.pytree_checkpoint_handler._get_restore_parameters(  # pylint: disable=protected-access
+        directory_,
+        None,
+        item_,
+        None,
+        None,
+    )
+    param_infos_ = jax.tree_util.tree_map(
+        _modify_orbax_param_info, param_infos_, state_dict_to_restore
+    )
+    return item_, param_infos_
 
   return state_dict_to_restore, restore_args, _transform_fn
 
@@ -2079,9 +2114,9 @@ def _restore_from_tf_checkpoint(
 
 
 class OrbaxCheckpointManagerInterface:
-  """Wrapper for orbax.checkpoint.CheckpointManager."""
+  """Wrapper for ocp.CheckpointManager."""
 
-  class _CheckpointManagerImpl(orbax.checkpoint.CheckpointManager):
+  class _CheckpointManagerImpl(ocp.CheckpointManager):
     """CheckpointManager implementation to deal with metrics update."""
 
     def _remove_old_checkpoints(self):
@@ -2136,20 +2171,20 @@ class OrbaxCheckpointManagerInterface:
     )
 
     checkpointers = {
-        _STATE_KEY: orbax.checkpoint.Checkpointer(
+        _STATE_KEY: ocp.Checkpointer(
             # TODO(b/273803615) Enable OCDBT.
-            orbax.checkpoint.PyTreeCheckpointHandler(use_ocdbt=False)
+            ocp.PyTreeCheckpointHandler(use_ocdbt=False)
         ),
     }
     if self._should_write_dataset_ckpt:
-      checkpointers[_DATASET_KEY] = orbax.checkpoint.Checkpointer(
+      checkpointers[_DATASET_KEY] = ocp.Checkpointer(
           DatasetCheckpointHandler(checkpoint_filename=dataset_ckpt_name)
       )
 
     def best_fn(metrics):
       return metrics[metric_name_to_monitor]
 
-    options = orbax.checkpoint.CheckpointManagerOptions(
+    options = ocp.CheckpointManagerOptions(
         max_to_keep=keep,
         save_interval_steps=period,
         keep_period=force_keep_period,
@@ -2234,12 +2269,12 @@ class OrbaxCheckpointManagerInterface:
         step, items, save_kwargs=save_kwargs, force=force
     )
 
-    # Record JAX montioring events.
+    # Record JAX monitoring events.
     end_time = time.time()
     monitoring.record_event_duration_secs(
         _WRITE_CHECKPOINT_EVENT, end_time - start_time
     )
-    orbax.checkpoint.utils.record_saved_duration(start_time)
+    ocp.utils.record_saved_duration(start_time)
 
     return saved
 
@@ -2271,6 +2306,8 @@ class OrbaxCheckpointManagerInterface:
     Returns:
       The restored train state.
     """
+    if lazy_parameters:
+      logging.warning('Orbax does not support lazy restoration.')
     start_time = time.time()
     if step is not None and path is not None:
       raise ValueError('Can only provide `step` or `path` but not both.')
@@ -2289,7 +2326,6 @@ class OrbaxCheckpointManagerInterface:
             _construct_restore_args,
             dtype=self._restore_dtype,
             mesh=self._partitioner.mesh,
-            lazy_parameters=lazy_parameters,
         ),
         param_infos,
     )
@@ -2361,7 +2397,6 @@ class OrbaxCheckpointManagerInterface:
     full_state_dict = checkpoint_importer.restore_from_t5_checkpoint(
         self._train_state.state_dict(),
         path_or_dir,
-        lazy_parameters=False,
         strict=strict,
         translator=translator,
     )
