@@ -10,11 +10,11 @@ from t5x import models
 include 't5x/configs/runs/finetune.gin'
 include 't5x/examples/t5/t5_1_1/base.gin'
 
-BATCH_SIZE = 128
+BATCH_SIZE = 8
 MIXTURE_OR_TASK_NAME = "super_glue_boolq_v102"
 TASK_FEATURE_LENGTHS = {'inputs': 512, 'targets': 128}
 DROPOUT_RATE = 0.1
-TRAIN_STEPS = 534288  # 524288 pre-trained steps + 200000 fine-tuning steps.
+TRAIN_STEPS = 624288  # 524288 pre-trained steps + 200000 fine-tuning steps.
 USE_CACHED_TASKS = False
 
 
@@ -31,7 +31,7 @@ INITIAL_CHECKPOINT_PATH = "gs://fuzhao/t5x/wiki-base-repeat256/t5-500KSteps/chec
 # LOSS_NORMALIZING_FACTOR = 14592
 
 train_script.train:
-  eval_period = 1000
+  eval_period = 5000
 
 train_script.train:
   train_dataset_cfg = @train/utils.DatasetConfig()
