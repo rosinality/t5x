@@ -11,7 +11,7 @@ from t5x import models
 
 
 include 'flaxformer/flaxformer/t5x/configs/t5/models/t5_1_1_base_decoder_only.gin'
-include 't5x/contrib/moe/configs/runs/finetune.gin'
+include 't5x/configs/runs/finetune.gin'
 
 
 BATCH_SIZE = 128
