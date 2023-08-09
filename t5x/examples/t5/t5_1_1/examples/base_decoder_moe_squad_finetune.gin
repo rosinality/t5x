@@ -41,7 +41,7 @@ train_script.train:
   infer_eval_dataset_cfg = @infer_eval/utils.DatasetConfig()
 
 # models.MoeEncoderDecoderModel.predict_batch_with_aux.num_decodes = 4
-models.MoEDecoderOnlyModel.inputs_bidirectional_attention=True
+models.MoeDecoderOnlyModel.inputs_bidirectional_attention=True
 
 infer_eval/utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
