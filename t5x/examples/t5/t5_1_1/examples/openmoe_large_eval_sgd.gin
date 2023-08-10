@@ -22,7 +22,7 @@ EVAL_OUTPUT_DIR = %gin.REQUIRED
 
 USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 8
-NUM_EXPERT_PARTITIONS = 8
+NUM_EXPERT_PARTITIONS = 1
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "bigbench:gem.mix.t5_default_vocab.1_shot.all_examples.schema_guided_dialog"
 
@@ -43,7 +43,7 @@ utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
   task_feature_lengths = None  # Auto-computes the max feature lengths.
   split = 'all'
-  batch_size = 64
+  batch_size = 1
   shuffle = False
   seed = 42
   use_cached = %USE_CACHED_TASKS
