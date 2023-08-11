@@ -22,7 +22,7 @@ EVAL_OUTPUT_DIR = %gin.REQUIRED
 
 USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 8
-NUM_EXPERT_PARTITIONS = 8
+NUM_EXPERT_PARTITIONS = 4
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "trivia_qa_v010"
 
@@ -43,7 +43,7 @@ utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
   task_feature_lengths = {'inputs': 1024, 'targets': 128}  # Auto-computes the max feature lengths.
   split = 'validation'
-  batch_size = 1
+  batch_size = 8
   shuffle = False
   seed = 42
   use_cached = %USE_CACHED_TASKS
