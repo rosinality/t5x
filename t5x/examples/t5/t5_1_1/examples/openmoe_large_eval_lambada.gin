@@ -29,12 +29,12 @@ MIXTURE_OR_TASK_NAME = "ul2_lambada"
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 4
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
 
-decoding.temperature_sample:
-  temperature = 1.0
-  topk = 40
-
 # decoding.temperature_sample:
-#   temperature = 0.0
+#   temperature = 1.0
+#   topk = 40
+
+decoding.temperature_sample:
+  temperature = 0.0
 
 eval_script.evaluate:
   model = %MODEL  # imported from separate gin file
