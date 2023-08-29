@@ -24,14 +24,14 @@ USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 8
 NUM_EXPERT_PARTITIONS = 1
 DROPOUT_RATE = 0.0  # unused boilerplate
-MIXTURE_OR_TASK_NAME = "super_glue_boolq_v102"
+MIXTURE_OR_TASK_NAME = "ul2_boolq"
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
 
 decoding.temperature_sample:
-  temperature = 1.0
-  topk = 40
+  temperature = 0.0
+  # topk = 40
 
 eval_script.evaluate:
   model = %MODEL  # imported from separate gin file
