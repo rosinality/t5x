@@ -41,7 +41,7 @@ eval_script.evaluate:
 
 utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
-  task_feature_lengths = None # {'inputs': 1024, 'targets': 16}  # Auto-computes the max feature lengths.
+  task_feature_lengths = {'inputs': 1024, 'targets': 4}  # Auto-computes the max feature lengths.
   split = 'validation'
   batch_size = 1
   shuffle = False
