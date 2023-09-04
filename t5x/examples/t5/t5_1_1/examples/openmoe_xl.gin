@@ -26,14 +26,14 @@ TRAIN_STEPS = 500000
 DROPOUT_RATE = 0.0
 BATCH_SIZE = 1024
 NUM_MODEL_PARTITIONS = 16
-NUM_EXPERT_PARTITIONS = 16
+NUM_EXPERT_PARTITIONS = 32
 NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
 
 train_script.train:
   eval_period = 2500
   
 moe_trainer.MoeTrainer:
-  num_microbatches = 16
+  num_microbatches = 8
 
 # Keep slightly fewer checkpoints than pre-training defaults.
 utils.SaveCheckpointConfig.period = 2500
