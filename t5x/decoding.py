@@ -1006,7 +1006,6 @@ def beam_search(inputs: jnp.ndarray,
                 eos_id: int,
                 num_decodes: int = 4,
                 alpha: float = 0.6,
-                initial_index: Optional[jnp.ndarray] = None,
                 max_decode_len: Optional[int] = None,
                 decode_rng: Optional[jnp.ndarray] = None,
                 cache_offset: int = 0) -> Tuple[jnp.ndarray, jnp.ndarray]:
