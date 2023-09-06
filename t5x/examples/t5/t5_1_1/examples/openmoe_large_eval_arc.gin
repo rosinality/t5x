@@ -25,6 +25,7 @@ NUM_MODEL_PARTITIONS = 8
 NUM_EXPERT_PARTITIONS = 1
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "arc"
+EVAL_EXPERT_CAPACITY_FACTOR = 2.
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
@@ -43,7 +44,7 @@ utils.DatasetConfig:
   mixture_or_task_name = %MIXTURE_OR_TASK_NAME
   task_feature_lengths = None # {'inputs': 1024, 'targets': 4}  # Auto-computes the max feature lengths.
   split = 'validation'
-  batch_size = 8
+  batch_size = 32
   shuffle = False
   seed = 42
   use_cached = %USE_CACHED_TASKS
