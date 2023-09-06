@@ -27,18 +27,15 @@ DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "trivia_qa_v010_nocontext"
 EVAL_EXPERT_CAPACITY_FACTOR = 1.25
 
-models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 5
-models.MoeDecoderOnlyModel.decode_fn = @decoding.beam_search
-
-# models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
-# models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
+models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
+models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
 
 # decoding.temperature_sample:
 #   temperature = 1.0
 #   topk = 40
 
-# decoding.temperature_sample:
-#   temperature = 0.0
+decoding.temperature_sample:
+  temperature = 0.0
 
 eval_script.evaluate:
   model = %MODEL  # imported from separate gin file
