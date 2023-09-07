@@ -25,6 +25,7 @@ NUM_MODEL_PARTITIONS = 8
 NUM_EXPERT_PARTITIONS = 32
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "mmlu"
+EVAL_EXPERT_CAPACITY_FACTOR = 4.0
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
