@@ -31,7 +31,11 @@ NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU effic
 
 train_script.train:
   eval_period = 5000
-  
+  train_eval_dataset_cfg = @train_eval/utils.DatasetConfig()
+
+train_eval/utils.DatasetConfig:
+  batch_size = 32
+
 moe_trainer.MoeTrainer:
   num_microbatches = 32
 
