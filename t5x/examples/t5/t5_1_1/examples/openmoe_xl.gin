@@ -19,21 +19,21 @@ VOCABULARY = @seqio.SentencePieceVocabulary()
 seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://fuzhao/tokenizers/umt5.256000/sentencepiece.model"
 seqio.SentencePieceVocabulary.extra_ids = 300
 
-MIXTURE_OR_TASK_NAME = "mix_full_lm_v2"
+MIXTURE_OR_TASK_NAME = "mix_ul2_v2"
 USE_CACHED_TASKS = False
-TASK_FEATURE_LENGTHS = {"targets": 2048} # {"inputs": 1024, "targets": 1024}
+TASK_FEATURE_LENGTHS = {"inputs": 1024, "targets": 1024}
 TRAIN_STEPS = 5000 # 500000
 DROPOUT_RATE = 0.0
 BATCH_SIZE = 1024
 NUM_MODEL_PARTITIONS = 16
 NUM_EXPERT_PARTITIONS = 32
-NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
+NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency
 
 train_script.train:
-  eval_period = 500
+  eval_period = 1000
   
 moe_trainer.MoeTrainer:
-  num_microbatches = 8
+  num_microbatches = 32
 
 # Keep slightly fewer checkpoints than pre-training defaults.
 utils.SaveCheckpointConfig.period = 500
