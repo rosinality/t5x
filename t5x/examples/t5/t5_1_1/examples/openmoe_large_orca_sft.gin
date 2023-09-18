@@ -30,7 +30,7 @@ NUM_EXPERT_PARTITIONS = 32
 NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
 
 train_script.train:
-  eval_period = 2500
+  eval_period = 1000
   train_eval_dataset_cfg = @train_eval/utils.DatasetConfig()
 utils.SaveCheckpointConfig.period = 1000
 
