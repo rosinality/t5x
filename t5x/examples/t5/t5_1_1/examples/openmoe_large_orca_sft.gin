@@ -21,13 +21,13 @@ seqio.SentencePieceVocabulary.extra_ids = 300
 
 MIXTURE_OR_TASK_NAME = "orca_sft"
 USE_CACHED_TASKS = False
-TASK_FEATURE_LENGTHS = {"targets": 2048}
+TASK_FEATURE_LENGTHS = {'inputs': 1536, "targets": 512}
 TRAIN_STEPS = 700000
-DROPOUT_RATE = 0.0
+DROPOUT_RATE = 0.05
 BATCH_SIZE = 64
 NUM_MODEL_PARTITIONS = 8
 NUM_EXPERT_PARTITIONS = 32
-NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
+NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency
 
 train_script.train:
   eval_period = 1000
@@ -35,10 +35,10 @@ train_script.train:
 utils.SaveCheckpointConfig.period = 1000
 
 train_eval/utils.DatasetConfig:
-  batch_size = 32
+  batch_size = 16
 
 moe_trainer.MoeTrainer:
-  num_microbatches = 2
+  num_microbatches = 8
 
 # Use num_microbatches = 16 on 256 TPU v3, or 8 on 512 TPU v3
 # moe_trainer.MoeTrainer:
