@@ -35,10 +35,10 @@ train_script.train:
 utils.SaveCheckpointConfig.period = 1000
 
 train_eval/utils.DatasetConfig:
-  batch_size = 16
+  batch_size = 64
 
 moe_trainer.MoeTrainer:
-  num_microbatches = 8
+  num_microbatches = 2
   learning_rate_fn = @utils.create_learning_rate_scheduler()
 
 utils.create_learning_rate_scheduler:
