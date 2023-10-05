@@ -84,7 +84,7 @@ def bounds_from_last_device(last_device: jax.Device) -> HardwareMesh:
   else:
     # On non-TPU platforms, the "mesh" is hosts x devices per host in order
     # to take advantage of faster within-host interconnect.
-    return jax.host_count(), jax.local_device_count()
+    return jax.process_count(), jax.local_device_count()
 
 
 def get_coords(device: jax.Device) -> HardwareMesh:
@@ -259,7 +259,9 @@ def get_mesh(model_parallel_submesh: HardwareMesh,
 
 def get_cpu_mesh() -> Mesh:
   """Trivial mesh for CPU Testing."""
-  devices = np.empty((jax.host_count(), jax.local_device_count()), dtype=object)
+  devices = np.empty(
+      (jax.process_count(), jax.local_device_count()), dtype=object
+  )
   for device in jax.devices():
     devices[device.process_index, device.id % jax.local_device_count()] = device
   return Mesh(devices, ['data', 'model'])
@@ -581,7 +583,7 @@ class BasePartitioner(metaclass=abc.ABCMeta):
       logging.error(
           (
               '`model_parallel_submesh` must be either None or a 4-tuple. Got'
-              ' `model_parallel_submesh`=%s. A ValueError will be raised'
+              ' `model_parallel_submesh`=%r. A ValueError will be raised'
               ' beginning March 1, 2022.'
           ),
           model_parallel_submesh,
@@ -590,9 +592,11 @@ class BasePartitioner(metaclass=abc.ABCMeta):
     if bool(num_partitions) and bool(model_parallel_submesh):
       logging.error(
           'At most one of `num_partitions` or `model_parallel_submesh` can be '
-          'set. Got `num_partitions=%s` and `model_parallel_submesh`=%s. A '
-          'ValueError will be raised beginning March 21, 2022.', num_partitions,
-          model_parallel_submesh)
+          'set. Got `num_partitions=%r` and `model_parallel_submesh`=%r. A '
+          'ValueError will be raised beginning March 21, 2022.',
+          num_partitions,
+          model_parallel_submesh,
+      )
 
     self._num_partitions = num_partitions
     self._model_parallel_submesh = model_parallel_submesh

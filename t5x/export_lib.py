@@ -218,6 +218,10 @@ class ExportableModule(tf.Module):
   def export_batch_sizes(self):
     return self._allowed_batch_sizes or [self._batch_size]
 
+  @tf.function(autograph=False, jit_compile=False)
+  def preproc_func(self, *args):
+    return self._preproc_tf_fn(*args)
+
 
 def get_train_state_initializer(
     model: models.BaseTransformerModel,
@@ -289,6 +293,7 @@ def create_inference_function(
     enable_xla: bool = True,
     polymorphic_shapes_inputs: Optional[Any] = None,
     native_lowering: bool = False,
+    native_lowering_platforms: Sequence[str] = (),
     model_fn_extra_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> Callable[[Mapping[str, Any], Any], PyTree]:
   """Fetches a model and returns the inference function based on inference_mode."""
@@ -351,6 +356,7 @@ def create_inference_function(
         model_fn,
         polymorphic_shapes=[None, polymorphic_shapes_inputs],
         native_serialization=native_lowering,
+        native_serialization_platforms=native_lowering_platforms,
         enable_xla=enable_xla,
     )
 
@@ -589,17 +595,25 @@ def create_dual_encoder_preprocessor(
     tokenized_inputs: bool = False,
     input_tensor_name: str = 'text_batch',
     bucket_keys: Optional[Mapping[str, List[int]]] = None,
+    split_separator: Optional[str] = None,
 ) -> Tuple[PreprocessorFn, Sequence[tf.TensorSpec]]:
   """Builds a function based on the config task to tokenize and batch the input text."""
 
   def preprocess(input_texts: tf.Tensor) -> Mapping[str, tf.Tensor]:
     """TF-based preprocessor that takes a batch of text and converts it to model features."""
-    inputs = input_texts
     if tokenized_inputs:
+      inputs = input_texts
       targets = tf.broadcast_to(
           tf.constant(0, dtype=tf.int32), tf.shape(input_texts))
-    else:
+    elif split_separator is None:
+      inputs = input_texts
       targets = tf.broadcast_to(tf.constant(''), tf.shape(input_texts))
+    else:
+      ragged_split = tf.strings.split(
+          input_texts, sep=split_separator, maxsplit=1
+      )
+      split = ragged_split.to_tensor(shape=[tf.shape(input_texts)[0], 2])
+      inputs, targets = split[:, 0], split[:, 1]
 
     # TODO(b/188656799): Generalize this code to work with arbitrary models.
     def featurize(text, k):
@@ -647,6 +661,7 @@ def create_decoder_preprocessor(
     output_features: Mapping[str, seqio.Feature],
     task_feature_lengths: Mapping[str, int],
     tokenized_inputs: bool = False,
+    input_feature: str = 'inputs',
 ) -> PreprocessorFn:
   """Returns a function to tokenize and featurize inputs for decoder only models.
 
@@ -657,59 +672,41 @@ def create_decoder_preprocessor(
     tokenized_inputs: specifies whether the input is expected to be
       pre-tokenized. If so, the preprocessor expects an int32 tensor padded with
       0s to shape of [B, N] rather than a string tensor of shape [B].
+    input_feature: Name of the feature provided by `input_texts`, e.g., 'inputs'
+      or 'targets'.
   """
 
   def preprocess(input_texts: tf.Tensor) -> Mapping[str, tf.Tensor]:
     """TF-based preprocessor that takes a batch of text and converts it to model features."""
 
-    if tokenized_inputs:
-      inputs = input_texts  # actually an int32 tensor of shape [B, N].
-      targets = tf.broadcast_to(
-          tf.constant(0, dtype=tf.int32), tf.shape(input_texts))
-    else:
-      inputs = input_texts
-      targets = tf.broadcast_to(tf.constant(''), tf.shape(input_texts))
-
-    def tokenize(text, k):
-      vocab = output_features[k].vocabulary  # type: seqio.Vocabulary
+    def tokenize(text):
+      feature = output_features[input_feature]
+      vocab = feature.vocabulary  # type: seqio.Vocabulary
       if not tokenized_inputs:  # if inputs are tokenized, we don't re-tokenize.
         t = vocab.encode_tf(text)
       else:
         t = text
-      if output_features[k].add_eos:
+      if feature.add_eos:
         t = tf.concat([t, [vocab.eos_id]], axis=-1)
       return t
 
-    decoder_input_tokens = tf.map_fn(
-        functools.partial(tokenize, k='inputs'),
-        inputs,
+    decoder_tokens = tf.map_fn(
+        tokenize,
+        input_texts,
         fn_output_signature=(tf.int32),
     )
 
-    decoder_target_tokens = tf.map_fn(
-        functools.partial(tokenize, k='targets'),
-        targets,
-        fn_output_signature=(tf.int32),
-    )
-
-    decoder_target_tokens = tf.concat(
-        [decoder_input_tokens, decoder_target_tokens], axis=-1
-    )
-
-    # Create 'inputs_width' tensor in the same shape as decoder_target_tokens.
-    # It is the length of 'inputs' (excluding padding 0 values) tiled across
-    # length dimension and 'inputs_width_add_pos' is the same except that it
-    # has one additional position tensor.
-    ragged_input_tokens = tf.RaggedTensor.from_tensor(
-        decoder_input_tokens, padding=0
-    )
-    inputs_length = tf.cast(ragged_input_tokens.row_lengths(), dtype=tf.int32)
-    inputs_length = tf.expand_dims(inputs_length, -1)
-    if output_features['inputs'].add_eos:
-      inputs_length -= 1
-    ones_like_target = tf.ones(tf.shape(decoder_target_tokens), dtype=tf.int32)
-    inputs_width = tf.multiply(ones_like_target, inputs_length)
-    inputs_width_add_pos = tf.multiply(ones_like_target, inputs_length + 1)
+    if input_feature == 'inputs':
+      # 'inputs_width' is the length of 'inputs' (excluding padding 0).
+      ragged_input_tokens = tf.RaggedTensor.from_tensor(
+          decoder_tokens, padding=0
+      )
+      inputs_length = tf.cast(ragged_input_tokens.row_lengths(), dtype=tf.int32)
+      inputs_width = tf.expand_dims(inputs_length, -1)
+      inputs_width_add_pos = inputs_width + 1
+    else:
+      inputs_width = tf.zeros(tf.shape(decoder_tokens)[0], dtype=tf.int32)
+      inputs_width_add_pos = inputs_width
 
     def featurize(text, length):
       text = text[:length]
@@ -721,18 +718,10 @@ def create_decoder_preprocessor(
       return text, ar_inputs, loss_weights
 
     targets_length = sum(task_feature_lengths.values())
-    inputs_width, _, _ = tf.map_fn(
-        functools.partial(featurize, length=targets_length),
-        inputs_width,
-        fn_output_signature=(tf.int32, tf.int32, tf.int32))
-    inputs_width_add_pos, _, _ = tf.map_fn(
-        functools.partial(featurize, length=targets_length),
-        inputs_width_add_pos,
-        fn_output_signature=(tf.int32, tf.int32, tf.int32))
     decoder_target_tokens, decoder_input_tokens, decoder_loss_weights = (
         tf.map_fn(
             functools.partial(featurize, length=targets_length),
-            decoder_target_tokens,
+            decoder_tokens,
             fn_output_signature=(tf.int32, tf.int32, tf.int32),
         )
     )
@@ -742,7 +731,8 @@ def create_decoder_preprocessor(
                           axis=0)
 
     decoder_causal_attention = tf.cast(
-        positions < inputs_width_add_pos, dtype=decoder_target_tokens.dtype)
+        positions < inputs_width_add_pos, dtype=decoder_target_tokens.dtype
+    )
 
     inputs = positions < inputs_width
     padding_mask = tf.cast(decoder_loss_weights, dtype=tf.bool)
@@ -1309,6 +1299,7 @@ def save(
     mixture_or_task_name: Optional[str] = None,
     validation_examples: Optional[List[Any]] = None,
     native_lowering: bool = False,
+    native_lowering_platforms: Sequence[str] = (),
     enable_xla: bool = True,
     decode_outputs: Optional[bool] = None,
     trailing_shapes: Optional[Mapping[str, Tuple[int, ...]]] = None,
@@ -1356,6 +1347,11 @@ def save(
       model.
     native_lowering: for experimental purposes only -- if True, don't convert
       Jax fns to TF fns.
+    native_lowering_platforms: In conjunction with `native_lowering`, specify
+      the platform(s) for which to lower the code. Must be a tuple of strings,
+      including a subset of: 'cpu', 'cuda', 'rocm', 'tpu'. The default
+      (empty tuple), specifies the JAX default backend on the machine where the
+      lowering is done.
     enable_xla: Defaults to true. If false, jax2tf conversion only emits non-XLA
       ops.
     decode_outputs: Optional bool. If provided, determines whether to decode the
@@ -1429,6 +1425,7 @@ def save(
           input_signature, preprocessor
       ),
       native_lowering=native_lowering,
+      native_lowering_platforms=native_lowering_platforms,
   )
 
   logging.info('Loading parameters from checkpoint...')
@@ -1448,6 +1445,7 @@ def save(
       params=params,
       batch_size=batch_size,
   )
+  module.preproc_func.get_concrete_function(*input_signature)
   signatures = {
       signature_name: module.__call__.get_concrete_function(*input_signature)
   }

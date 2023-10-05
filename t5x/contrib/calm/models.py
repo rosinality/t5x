@@ -72,10 +72,16 @@ class DecodeFnCallable(typing_extensions.Protocol):
   """Decoding function call signature."""
 
   def __call__(
-      self, *, inputs: jnp.ndarray, cache: Mapping[str, jnp.ndarray],
-      tokens_to_logits: TokensIdsToLogitsCallable, eos_id: int,
-      num_decodes: int, decode_rng: Optional[jax.random.KeyArray],
-      cache_offset: int, **kwargs
+      self,
+      *,
+      inputs: jnp.ndarray,
+      cache: Mapping[str, jnp.ndarray],
+      tokens_to_logits: TokensIdsToLogitsCallable,
+      eos_id: int,
+      num_decodes: int,
+      decode_rng: Optional[jax.Array],
+      cache_offset: int,
+      **kwargs,
   ) -> Tuple[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     """Decoding function interface.
 
@@ -269,7 +275,7 @@ class EncoderDecoderModel(models.EncoderDecoderModel):
     for meta_logits, meta_labels in zip(all_meta_logits[:-1],
                                         all_meta_labels[:-1]):
       # Balance across the positive/ negative labels.
-      balanced_weights = weights.copy().astype(float)
+      balanced_weights = weights.copy().astype(float)  # pytype: disable=attribute-error  # jnp-type
 
       pos_num = (meta_labels * weights == 1).sum()
       neg_num = ((1 - meta_labels) * weights == 1).sum()
@@ -790,7 +796,7 @@ class EncoderDecoderModel(models.EncoderDecoderModel):
       self,
       params: PyTree,
       batch: Mapping[str, jnp.ndarray],
-      rng: Optional[jax.random.KeyArray] = None,
+      rng: Optional[jax.Array] = None,
       decoder_params: Optional[MutableMapping[str, Any]] = None,
       return_all_decodes: bool = False,
       num_decodes: int = 1,

@@ -43,6 +43,7 @@ import numpy as np
 import orbax.checkpoint
 import seqio
 from t5x import checkpoints
+from t5x import models
 from t5x import optimizers
 from t5x import partitioning
 from t5x import state_utils
@@ -354,7 +355,7 @@ class LegacyCheckpointManager(orbax.checkpoint.CheckpointManager):
     if save_cfg is not None:
       if save_cfg.save_dataset:
         assert ds_iter is not None
-      save_checkpointer = save_cfg.checkpointer_cls(
+      save_checkpointer = save_cfg.checkpointer_cls(  # pytype: disable=wrong-arg-types  # jnp-type
           train_state=train_state_shape,
           partitioner=partitioner,
           checkpoints_dir=model_dir,
@@ -748,7 +749,7 @@ def multihost_assert_equal(input_tree, fail_message: str = ''):
 # ------------------------------------------------------------------------------
 # Fast *nondeterministic* hardware RNG for faster Dropout
 # ------------------------------------------------------------------------------
-def _hardware_uniform(
+def _hardware_uniform(  # pytype: disable=annotation-type-mismatch  # jnp-type
     rng_key: Array,
     shape: Shape,
     dtype: jnp.dtype = np.float32,
@@ -1857,7 +1858,9 @@ def get_vocabulary(
   return (first_vocab, first_vocab)
 
 
-def verify_matching_vocabs(cfg: DatasetConfig, model: Any):
+def verify_matching_vocabs(
+    cfg: DatasetConfig, model: models.BaseTransformerModel
+):
   """Verify whether the task vocab matches the model vocab.
 
   The seqio Task and the Model both define their vocabularies
