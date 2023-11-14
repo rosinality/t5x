@@ -2075,7 +2075,9 @@ def _construct_orbax_restoration_transforms(
     def _modify_orbax_param_info(info, value):
       if ocp.utils.leaf_is_placeholder(value):
         name = ocp.utils.name_from_leaf_placeholder(value)
-        return dataclasses.replace(info, path=directory_ / name)
+        return dataclasses.replace(
+            info, name=name, path=directory_ / name, parent_dir=directory_
+        )
       return info
 
     item_ = jax.tree_util.tree_map(
@@ -2361,7 +2363,11 @@ class OrbaxCheckpointManagerInterface:
             self.directory,
             restore_dtype=self._restore_dtype,
         )
-        return legacy_checkpointer.restore(path=path)
+        return legacy_checkpointer.restore(
+            path=path,
+            fallback_state=fallback_state,
+            state_transformation_fns=state_transformation_fns,
+        )
 
     state_dict = self._train_state.state_dict()
     # Returns a state dict rather than a train state.

@@ -80,6 +80,8 @@ class CustomInferenceMode:
   model_fn_name: str
   # Fetch useful output from the raw output of the model function.
   fetch_output: Optional[Callable[[PyTree], PyTree]] = None
+  # Constant keyword aguments to append when calling the model function.
+  model_fn_const_kwargs: None | Mapping[str, Any] = None
 
 
 class CreatePostprocessorFn(typing_extensions.Protocol):
@@ -177,7 +179,7 @@ class ExportableModule(tf.Module):
 
     if self._allowed_batch_sizes:
       if self._batch_size is not None:
-        raise ValueError('allowed_batch_size requires polymorphic batch size')
+        raise ValueError('allowed_batch_sizes requires polymorphic batch size')
       max_batch_size = self._max_batch_size or max(self._allowed_batch_sizes)
       allowed_batch_sizes = self._allowed_batch_sizes
     elif self._batch_size is not None:
@@ -185,7 +187,7 @@ class ExportableModule(tf.Module):
       allowed_batch_sizes = [self._batch_size]
     else:
       raise ValueError(
-          'Need to set either batch_size or allowed_batch_size when '
+          'Need to set either batch_size or allowed_batch_sizes when '
           'using batch_function.'
       )
     batch_wrapper = tf.nondifferentiable_batch_function(
@@ -273,12 +275,14 @@ def flatten(
 
 
 _BUILTIN_INFERENCE_MODES = {
-    'predict':
-        CustomInferenceMode('predict_batch_with_aux',
-                            functools.partial(flatten, assert_output_len=2)),
-    'score':
-        CustomInferenceMode('score_batch',
-                            functools.partial(flatten, assert_output_len=1)),
+    'predict': CustomInferenceMode(
+        model_fn_name='predict_batch_with_aux',
+        fetch_output=functools.partial(flatten, assert_output_len=2),
+    ),
+    'score': CustomInferenceMode(
+        model_fn_name='score_batch',
+        fetch_output=functools.partial(flatten, assert_output_len=1),
+    ),
 }
 
 
@@ -292,8 +296,8 @@ def create_inference_function(
     enable_jax2tf: bool,
     enable_xla: bool = True,
     polymorphic_shapes_inputs: Optional[Any] = None,
-    native_lowering: bool = False,
-    native_lowering_platforms: Sequence[str] = (),
+    native_lowering: bool = True,
+    native_lowering_platforms: Optional[Sequence[str]] = None,
     model_fn_extra_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> Callable[[Mapping[str, Any], Any], PyTree]:
   """Fetches a model and returns the inference function based on inference_mode."""
@@ -349,6 +353,11 @@ def create_inference_function(
 
   else:
     model_fn = getattr(model, inference_mode.model_fn_name)
+
+  if inference_mode.model_fn_const_kwargs:
+    model_fn = functools.partial(
+        model_fn, **inference_mode.model_fn_const_kwargs
+    )
 
   model_fn = maybe_partition(model_fn)
   if enable_jax2tf:
@@ -1276,7 +1285,7 @@ def create_batch_polymorphic_shapes(
 def save(
     *,
     model: models.BaseTransformerModel,
-    inference_mode: str,
+    inference_mode: str | CustomInferenceMode,
     restore_checkpoint_cfg: utils.RestoreCheckpointConfig,
     exportable_module_cls: Type[ExportableModule],
     create_preprocessor_fn: CreatePreprocessorFn = create_preprocessor,
@@ -1299,7 +1308,7 @@ def save(
     mixture_or_task_name: Optional[str] = None,
     validation_examples: Optional[List[Any]] = None,
     native_lowering: bool = False,
-    native_lowering_platforms: Sequence[str] = (),
+    native_lowering_platforms: Optional[Sequence[str]] = None,
     enable_xla: bool = True,
     decode_outputs: Optional[bool] = None,
     trailing_shapes: Optional[Mapping[str, Tuple[int, ...]]] = None,
@@ -1350,7 +1359,7 @@ def save(
     native_lowering_platforms: In conjunction with `native_lowering`, specify
       the platform(s) for which to lower the code. Must be a tuple of strings,
       including a subset of: 'cpu', 'cuda', 'rocm', 'tpu'. The default
-      (empty tuple), specifies the JAX default backend on the machine where the
+      (None), specifies the JAX default backend on the machine where the
       lowering is done.
     enable_xla: Defaults to true. If false, jax2tf conversion only emits non-XLA
       ops.
