@@ -31,13 +31,13 @@ NUM_EXPERT_PARTITIONS = 32
 NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency
 
 train_script.train:
-  eval_period = 2500
+  eval_period = 1000
   
 moe_trainer.MoeTrainer:
   num_microbatches = 32
 
 # Keep slightly fewer checkpoints than pre-training defaults.
-utils.SaveCheckpointConfig.period = 2500
+utils.SaveCheckpointConfig.period = 1000
 utils.SaveCheckpointConfig.keep = 10
 
 # Use 32 on 256 TPU v3
