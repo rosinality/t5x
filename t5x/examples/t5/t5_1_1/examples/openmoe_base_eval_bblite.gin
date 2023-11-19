@@ -23,7 +23,7 @@ EVAL_OUTPUT_DIR = %gin.REQUIRED
 USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 1
 DROPOUT_RATE = 0.0  # unused boilerplate
-MIXTURE_OR_TASK_NAME = "bigbench:bigbench_lite_v1.mix.t5_default_vocab.1_shot.all_examples"
+MIXTURE_OR_TASK_NAME = "bigbench:bigbench_lite_v1.mix.t5_default_vocab.3_shot.all_examples"
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 1
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
