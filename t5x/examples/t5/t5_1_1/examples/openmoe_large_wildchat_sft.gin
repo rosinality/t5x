@@ -1,0 +1,48 @@
+# Register necessary SeqIO Tasks/Mixtures.
+from __gin__ import dynamic_registration
+import t5.data.mixtures
+import __main__ as train_script
+import seqio
+import flaxformer
+from t5x import utils
+# from t5x import trainer
+from t5x.contrib.moe import trainer as moe_trainer
+from t5x.contrib.moe import models
+
+
+include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_large.gin'
+include 't5x/contrib/moe/configs/runs/pretrain.gin'
+# include 't5x/configs/runs/pretrain.gin'
+
+# Vocabulary (shared by encoder and decoder)
+VOCABULARY = @seqio.SentencePieceVocabulary()
+seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://fuzhao/tokenizers/umt5.256000/sentencepiece.model"
+seqio.SentencePieceVocabulary.extra_ids = 300
+
+MIXTURE_OR_TASK_NAME = "orca_sft"
+USE_CACHED_TASKS = False
+TASK_FEATURE_LENGTHS = {'inputs': 1536, "targets": 512}
+TRAIN_STEPS = 700000
+DROPOUT_RATE = 0.05
+BATCH_SIZE = 64
+NUM_MODEL_PARTITIONS = 8
+NUM_EXPERT_PARTITIONS = 32
+NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency
+
+train_script.train:
+  eval_period = 1000
+  train_eval_dataset_cfg = @train_eval/utils.DatasetConfig()
+utils.SaveCheckpointConfig.period = 1000
+
+train_eval/utils.DatasetConfig:
+  batch_size = 32
+
+moe_trainer.MoeTrainer:
+  num_microbatches = 2
+  learning_rate_fn = @utils.create_learning_rate_scheduler()
+
+utils.create_learning_rate_scheduler:
+  factors = 'constant'
+  base_learning_rate = 0.001
+  warmup_steps = 1000
+ 
