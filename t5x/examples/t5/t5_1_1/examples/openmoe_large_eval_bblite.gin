@@ -22,7 +22,7 @@ EVAL_OUTPUT_DIR = %gin.REQUIRED
 
 USE_CACHED_TASKS = False
 NUM_MODEL_PARTITIONS = 8
-NUM_EXPERT_PARTITIONS = 4
+NUM_EXPERT_PARTITIONS = 32
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "bigbench:bigbench_lite_v1.mix.t5_default_vocab.1_shot.all_examples"
 
