@@ -21,7 +21,7 @@ seqio.SentencePieceVocabulary.extra_ids = 300
 
 MIXTURE_OR_TASK_NAME = "wildchat_gpt4_sft"
 USE_CACHED_TASKS = False
-TASK_FEATURE_LENGTHS = {"targets": 2048}
+TASK_FEATURE_LENGTHS = {'inputs': 1024, "targets": 1024}
 TRAIN_STEPS = 553000
 DROPOUT_RATE = 0.05
 BATCH_SIZE = 128
