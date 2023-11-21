@@ -38,7 +38,7 @@ moe_trainer.MoeTrainer:
 
 # Keep slightly fewer checkpoints than pre-training defaults.
 utils.SaveCheckpointConfig.period = 1000
-utils.SaveCheckpointConfig.keep = 10
+utils.SaveCheckpointConfig.keep = 20
 
 # Use 32 on 256 TPU v3
 # moe_trainer.MoeTrainer:
