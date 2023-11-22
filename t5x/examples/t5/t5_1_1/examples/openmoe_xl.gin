@@ -20,12 +20,13 @@ seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://fuzhao/tokenizers
 seqio.SentencePieceVocabulary.extra_ids = 300
 
 # MIXTURE_OR_TASK_NAME = "mix_ul2_v2"
-MIXTURE_OR_TASK_NAME = "mix_full_lm_v2"
-USE_CACHED_TASKS = False
 # TASK_FEATURE_LENGTHS = {"inputs": 1024, "targets": 1024}
-TASK_FEATURE_LENGTHS = {"targets": 2048}
+
 ROUTER_Z_LOSS_FACTOR = 0.001
 GROUP_SIZE = 8192
+MIXTURE_OR_TASK_NAME = "mix_full_lm_v2"
+TASK_FEATURE_LENGTHS = {"targets": 2048}
+USE_CACHED_TASKS = False
 TRAIN_STEPS = 50000
 DROPOUT_RATE = 0.0
 BATCH_SIZE = 1024
