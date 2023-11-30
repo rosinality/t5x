@@ -9,7 +9,7 @@ from t5x import utils
 from t5x.contrib.moe import models
 
 include 't5x/contrib/moe/configs/runs/eval.gin'
-include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_large.gin'
+include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_xl.gin'
 
 # Vocabulary (shared by encoder and decoder)
 VOCABULARY = @seqio.SentencePieceVocabulary()
