@@ -38,7 +38,7 @@ train_script.train:
   eval_period = 5000
   
 moe_trainer.MoeTrainer:
-  num_microbatches = 8
+  num_microbatches = 16
 
 # Keep slightly fewer checkpoints than pre-training defaults.
 utils.SaveCheckpointConfig.period = 5000
