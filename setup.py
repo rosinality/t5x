@@ -53,8 +53,8 @@ setuptools.setup(
         'flax @ git+https://github.com/google/flax#egg=flax',
         'fiddle >= 0.2.5',
         'gin-config',
-        f'jax == {_jax_version}',
-        f'jaxlib == {_jaxlib_version}',
+        # f'jax[tpu] >= {_jax_version}',
+        # f'jaxlib >= {_jaxlib_version}',
         (
             'jestimator @'
             ' git+https://github.com/google-research/jestimator#egg=jestimator'
