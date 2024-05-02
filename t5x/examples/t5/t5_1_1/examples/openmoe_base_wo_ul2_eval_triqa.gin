@@ -13,7 +13,7 @@ include 'flaxformer/flaxformer/t5x/configs/moe/models/st_moe_decoder_only_base.g
 
 # Vocabulary (shared by encoder and decoder)
 VOCABULARY = @seqio.SentencePieceVocabulary()
-seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://fuzhao/tokenizers/umt5.256000/sentencepiece.model"
+seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://rosinality-tpu-bucket/sentencepiece.model"
 seqio.SentencePieceVocabulary.extra_ids = 300
 
 NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency
