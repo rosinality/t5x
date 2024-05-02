@@ -50,17 +50,17 @@ setuptools.setup(
         'absl-py',
         'cached_property',
         'clu @ git+https://github.com/google/CommonLoopUtils#egg=clu',
-        'flax @ git+https://github.com/google/flax#egg=flax',
+        'flax == 0.7.5',
         'fiddle >= 0.2.5',
         'gin-config',
-        # f'jax[tpu] >= {_jax_version}',
-        # f'jaxlib >= {_jaxlib_version}',
+        f'jax[tpu] == {_jax_version}',
+        f'jaxlib == {_jaxlib_version}',
         (
             'jestimator @'
             ' git+https://github.com/google-research/jestimator#egg=jestimator'
         ),
         'numpy',
-        'optax @ git+https://github.com/deepmind/optax#egg=optax',
+        'optax == 0.1.7',
         'orbax-checkpoint',
         # 'seqio @ git+https://github.com/XueFuzhao/seqio#egg=seqio',
         'tensorflow-cpu',
