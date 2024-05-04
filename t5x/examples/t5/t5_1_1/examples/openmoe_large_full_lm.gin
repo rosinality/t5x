@@ -19,7 +19,7 @@ VOCABULARY = @seqio.SentencePieceVocabulary()
 seqio.SentencePieceVocabulary.sentencepiece_model_file = "gs://rosinality-tpu-bucket/sentencepiece.model"
 seqio.SentencePieceVocabulary.extra_ids = 300
 
-MIXTURE_OR_TASK_NAME = "mix_full_lm"
+MIXTURE_OR_TASK_NAME = "mix_full_lm_test"
 USE_CACHED_TASKS = False
 TASK_FEATURE_LENGTHS = {"targets": 2048}
 TRAIN_STEPS = 500000
