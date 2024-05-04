@@ -26,7 +26,7 @@ TRAIN_STEPS = 500000
 DROPOUT_RATE = 0.0
 BATCH_SIZE = 384
 NUM_MODEL_PARTITIONS = 4
-NUM_EXPERT_PARTITIONS = 32
+NUM_EXPERT_PARTITIONS = 8
 NUM_EMBEDDINGS = 256384  # vocab size rounded to a multiple of 128 for TPU efficiency2
 
 train_script.train:
