@@ -686,8 +686,6 @@ def accumulate_grads_microbatched(
   initial_flax_mutables = (
       train_state.flax_mutables if train_state.flax_mutables else None
   )
-  
-  logging.info(str(batch))
 
   if num_microbatches is None or num_microbatches <= 1:
 
