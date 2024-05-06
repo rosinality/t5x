@@ -50,6 +50,8 @@ def cross_entropy_with_logits(logits: jnp.ndarray, targets: jnp.ndarray,
   logits_sum = jax.scipy.special.logsumexp(logits, axis=-1, keepdims=True)
   log_softmax = logits - logits_sum
   loss = -jnp.sum(targets * log_softmax, axis=-1)
+  loss2 = jax.experimental.multihost_utils.process_allgather([loss])[0]
+  jax.debug.print("loss {}", loss2)
   # Add auxilliary z-loss term.
   log_z = jnp.squeeze(logits_sum, axis=-1)
   total_z_loss = z_loss * jax.lax.square(log_z)
