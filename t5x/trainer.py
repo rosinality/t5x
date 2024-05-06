@@ -524,6 +524,9 @@ class BaseTrainer(abc.ABC):
             metrics = merge_metrics(metrics, metrics_update)
           else:
             metrics = metrics_update
+            
+          self.train_metrics_manager.write_metrics_summary(
+            metrics_update, start_step + step_num, 1)
 
       self.train_state = train_state
 
