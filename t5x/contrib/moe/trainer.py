@@ -16,7 +16,6 @@
 
 from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 
-from absl import logging
 import cached_property
 from t5x import models
 from t5x import train_state as train_state_lib
@@ -108,8 +107,6 @@ class MoeTrainer(trainer.Trainer):
 
     def train_with_lr(train_state: train_state_lib.TrainState,
                       batch: BatchType):
-      logging.info(str(batch))
-      
       grad_accum, metrics, flax_mutables = (
           trainer.accumulate_grads_microbatched(
               self._model,
