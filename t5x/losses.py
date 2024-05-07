@@ -157,7 +157,7 @@ def compute_weighted_cross_entropy(
     total_loss /= loss_normalizing_factor
     total_z_loss /= loss_normalizing_factor
     
-  jax.print("total_loss {}", total_loss)
+  jax.debug.print("total_loss {}", total_loss)
     
   return jnp.sum(total_loss), jnp.sum(total_z_loss), weight_sum
 
