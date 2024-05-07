@@ -73,7 +73,6 @@ def _cross_entropy_with_logits_fwd(
   sum_exp = jnp.sum(exp_shifted, axis=-1, keepdims=True)
   log_softmax = shifted - jnp.log(sum_exp)
   loss = -jnp.sum(targets * log_softmax, axis=-1)
-  jax.debug.print("loss {}", loss)
   # Add auxilliary z-loss term.
   log_z = jnp.squeeze(jnp.log(sum_exp) + max_logit, axis=-1)
   total_z_loss = z_loss * jax.lax.square(log_z)
@@ -157,6 +156,9 @@ def compute_weighted_cross_entropy(
   if loss_normalizing_factor is not None:
     total_loss /= loss_normalizing_factor
     total_z_loss /= loss_normalizing_factor
+    
+  jax.print("total_loss {}", total_loss)
+    
   return jnp.sum(total_loss), jnp.sum(total_z_loss), weight_sum
 
 
