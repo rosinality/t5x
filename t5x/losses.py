@@ -140,6 +140,7 @@ def compute_weighted_cross_entropy(
       targets, vocab_size, on_value=confidence, off_value=low_confidence)
   total_loss, total_z_loss = cross_entropy_with_logits(
       logits, soft_targets, z_loss=z_loss)
+  orig_loss = total_loss
   total_loss = total_loss - normalizing_constant
 
   weight_sum = np.prod(targets.shape)
@@ -157,7 +158,8 @@ def compute_weighted_cross_entropy(
     total_loss /= loss_normalizing_factor
     total_z_loss /= loss_normalizing_factor
     
-  jax.debug.print("total_loss {}", total_loss)
+  jax.debug.print("loss {}, normalize {}, weights {}, factor {}",
+                  orig_loss, normalizing_constant, weights, loss_normalizing_factor)
     
   return jnp.sum(total_loss), jnp.sum(total_z_loss), weight_sum
 
