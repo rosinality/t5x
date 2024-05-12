@@ -34,10 +34,7 @@ train_script.train:
   eval_period = 2500
   train_eval_dataset_cfg = None
   # train_eval_dataset_cfg = @train_eval/utils.DatasetConfig()
-
-train/utils.DatasetConfig.seed = 42
-train_script.train.random_seed = 42
-utils.SaveCheckpointConfig.save_dataset = True
+  
 utils.SaveCheckpointConfig.period = 2500
 
 train_eval/utils.DatasetConfig:
