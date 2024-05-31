@@ -21,13 +21,14 @@ CHECKPOINT_PATH = %gin.REQUIRED
 EVAL_OUTPUT_DIR = %gin.REQUIRED
 
 USE_CACHED_TASKS = False
-NUM_MODEL_PARTITIONS = 8
-NUM_EXPERT_PARTITIONS = 32
+NUM_MODEL_PARTITIONS = 4
+NUM_EXPERT_PARTITIONS = 8
 DROPOUT_RATE = 0.0  # unused boilerplate
 MIXTURE_OR_TASK_NAME = "humaneval"
 
 models.MoeDecoderOnlyModel.predict_batch_with_aux.num_decodes = 4
 models.MoeDecoderOnlyModel.decode_fn = @decoding.temperature_sample
+models.MoeDecoderOnlyModel.inputs_bidirectional_attention = False
 
 # decoding.temperature_sample:
 #   temperature = 1.0
